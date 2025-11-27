@@ -31,11 +31,15 @@ const SLIDES = [
 function App() {
     const [currentSlide, setCurrentSlide] = useState(0);
     const [isFullscreen, setIsFullscreen] = useState(false);
-    const [touchStart, setTouchStart] = useState<number | null>(null);
-    const [touchEnd, setTouchEnd] = useState<number | null>(null);
-
-    const minSwipeDistance = 50;
+    const [isMobile, setIsMobile] = useState(false);
     const totalSlides = SLIDES.length;
+
+    useEffect(() => {
+        const checkMobile = () => setIsMobile(window.innerWidth < 768);
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
 
     const nextSlide = useCallback(() => {
         setCurrentSlide(prev => Math.min(prev + 1, totalSlides - 1));
@@ -45,32 +49,9 @@ function App() {
         setCurrentSlide(prev => Math.max(prev - 1, 0));
     }, []);
 
-    // Swipe Handlers
-    const onTouchStart = (e: React.TouchEvent) => {
-        setTouchEnd(null);
-        setTouchStart(e.targetTouches[0].clientX);
-    };
-
-    const onTouchMove = (e: React.TouchEvent) => {
-        setTouchEnd(e.targetTouches[0].clientX);
-    };
-
-    const onTouchEnd = () => {
-        if (!touchStart || !touchEnd) return;
-        const distance = touchStart - touchEnd;
-        const isLeftSwipe = distance > minSwipeDistance;
-        const isRightSwipe = distance < -minSwipeDistance;
-
-        if (isLeftSwipe) {
-            nextSlide();
-        }
-        if (isRightSwipe) {
-            prevSlide();
-        }
-    };
-
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            if (isMobile) return;
             if (e.key === 'ArrowRight' || e.key === 'Space') {
                 nextSlide();
             } else if (e.key === 'ArrowLeft') {
@@ -80,7 +61,7 @@ function App() {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [nextSlide, prevSlide]);
+    }, [nextSlide, prevSlide, isMobile]);
 
     const toggleFullscreen = () => {
         if (!document.fullscreenElement) {
@@ -97,13 +78,40 @@ function App() {
     const CurrentSlideComponent = SLIDES[currentSlide];
     const progress = ((currentSlide + 1) / totalSlides) * 100;
 
+    // --- Mobile View (Long Page / Vertical Scroll) ---
+    if (isMobile) {
+        return (
+            <div className="w-full bg-[#020617] text-slate-100 selection:bg-cyan-500/30">
+                {/* Mobile Header - Sticky */}
+                <div className="sticky top-0 left-0 w-full z-50 px-4 py-3 bg-[#020617]/90 backdrop-blur-xl border-b border-white/5 flex items-center justify-between shadow-lg">
+                     <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center font-bold text-xs text-white shadow-lg shadow-cyan-500/20">
+                            UT
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="font-bold text-sm tracking-wide text-white">城市寻宝</span>
+                        </div>
+                    </div>
+                    <div className="text-[10px] text-slate-500 font-mono border border-slate-800 px-2 py-1 rounded">
+                        LONG PAGE MODE
+                    </div>
+                </div>
+
+                {/* Vertical Scroll Container (No Snap, Natural Scroll with Gaps) */}
+                <div className="flex flex-col w-full pb-20 gap-4 bg-[#020617]">
+                    {SLIDES.map((SlideComponent, index) => (
+                        <div key={index} className="w-full min-h-screen relative border-b border-white/5 last:border-0 flex flex-col">
+                             <SlideComponent />
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    }
+
+    // --- Desktop View (Slideshow) ---
     return (
-        <div 
-            className="h-screen w-screen bg-[#020617] flex flex-col overflow-hidden text-slate-100 font-sans selection:bg-cyan-500/30"
-            onTouchStart={onTouchStart}
-            onTouchMove={onTouchMove}
-            onTouchEnd={onTouchEnd}
-        >
+        <div className="h-screen w-screen bg-[#020617] flex flex-col overflow-hidden text-slate-100 font-sans selection:bg-cyan-500/30">
             {/* Header Overlay */}
             <div className="absolute top-0 left-0 w-full z-50 p-6 flex justify-between items-start pointer-events-none">
                 <div className="flex items-center gap-3 pointer-events-auto">
@@ -136,8 +144,8 @@ function App() {
                     </motion.div>
                 </AnimatePresence>
 
-                {/* Navigation Controls - Hidden on Mobile */}
-                <div className="absolute bottom-8 right-8 gap-4 z-40 items-center hidden md:flex">
+                {/* Navigation Controls */}
+                <div className="absolute bottom-8 right-8 gap-4 z-40 items-center flex">
                     <span className="text-slate-500 font-mono text-xs mr-4">
                         {String(currentSlide + 1).padStart(2, '0')} / {String(totalSlides).padStart(2, '0')}
                     </span>
